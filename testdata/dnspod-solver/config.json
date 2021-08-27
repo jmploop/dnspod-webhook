@@ -1,0 +1,10 @@
+{
+  "apiSecretIdRef": {
+    "name": "dnspod-secret",
+    "key": "api-secret-id"
+  },
+  "apiSecretKeyRef": {
+    "name": "dnspod-secret",
+    "key": "api-secret-key"
+  }
+}
