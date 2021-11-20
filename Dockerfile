@@ -7,6 +7,7 @@ WORKDIR /workspace
 COPY go.mod .
 COPY go.sum .
 
+ARG GOPROXY
 RUN go mod download
 
 FROM build_deps AS build

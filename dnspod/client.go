@@ -8,7 +8,10 @@ import (
 )
 
 type Client struct {
-	dnsc *dnspod.Client
+	dnsc     *dnspod.Client
+	region   string
+	secretId string
+	ttl      *uint64
 }
 
 type TXTRecord struct {
@@ -17,24 +20,29 @@ type TXTRecord struct {
 	Value     string
 }
 
-// newClient set retries and backoff
-func newClient(secretId, secretKey string) (*Client, error) {
-	credential := common.NewCredential(secretId, secretKey)
+// NewClient set retries and backoff
+func NewClient(cfg Config) (*Client, error) {
+	credential := common.NewCredential(cfg.SecretId, cfg.SecretKey)
 
 	prof := profile.NewClientProfile()
 	prof.RateLimitExceededMaxRetries = 3
 	prof.RateLimitExceededRetryDuration = profile.ExponentialBackoff
 
-	client, err := dnspod.NewClient(credential, regions.Guangzhou, prof)
+	region := regions.Guangzhou
+	client, err := dnspod.NewClient(credential, region, prof)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Client{dnsc: client}, nil
+	return &Client{dnsc: client,
+			region:   region,
+			secretId: cfg.SecretId,
+			ttl:      cfg.TTL},
+		nil
 }
 
-// addTxtRecord
-func (c *Client) addTxtRecord(tr TXTRecord) error {
+// AddTxtRecord
+func (c *Client) AddTxtRecord(tr TXTRecord) error {
 	// create txt record to domain
 	req := dnspod.NewCreateRecordRequest()
 
@@ -44,13 +52,14 @@ func (c *Client) addTxtRecord(tr TXTRecord) error {
 
 	req.RecordType = common.StringPtr("TXT")
 	req.RecordLine = common.StringPtr("默认")
+	req.TTL = c.ttl
 
 	_, err := c.dnsc.CreateRecord(req)
 	return err
 }
 
-// deleteTxtRecord
-func (c *Client) deleteTxtRecord(tr TXTRecord) error {
+// DeleteTxtRecord
+func (c *Client) DeleteTxtRecord(tr TXTRecord) error {
 	// get all txt record for domain
 	listReq := dnspod.NewDescribeRecordListRequest()
 
@@ -65,9 +74,9 @@ func (c *Client) deleteTxtRecord(tr TXTRecord) error {
 		return err
 	}
 
-	// find equal txt record of domain then delete
 	for _, record := range listResp.Response.RecordList {
-		if record.Value == common.StringPtr(tr.Value) {
+		recordValue := *record.Value
+		if recordValue == tr.Value {
 			delReq := dnspod.NewDeleteRecordRequest()
 
 			delReq.Domain = common.StringPtr(tr.Domain)

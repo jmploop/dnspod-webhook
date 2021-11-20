@@ -6,16 +6,30 @@
 # solve the DNS01 challenge.
 # This group name should be **unique**, hence using your own company's domain
 # here is recommended.
-groupName: acme.mycompany.com
+groupName: certmanager.webhook.dnspod
 
 certManager:
   namespace: cert-manager
   serviceAccountName: cert-manager
 
 image:
-  repository: mycompany/webhook-image
+  repository: jmploop/cert-manager-webhook-dnspod
   tag: latest
   pullPolicy: IfNotPresent
+
+clusterIssuer:
+  enabled: false
+  name: webhook-dnspod
+  ttl: 600
+  staging: false
+  secretId: ''
+  secretKey: ''
+  #email:
+
+  # https://cert-manager.io/docs/configuration/acme/#adding-multiple-solver-types
+  #selector:
+  #  dnsZones:
+  #    - 'example.com'
 
 nameOverride: ""
 fullnameOverride: ""
@@ -24,7 +38,7 @@ service:
   type: ClusterIP
   port: 443
 
-resources: {}
+resources: { }
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -32,12 +46,12 @@ resources: {}
   # limits:
   #  cpu: 100m
   #  memory: 128Mi
-  # requests:
-  #  cpu: 100m
-  #  memory: 128Mi
+# requests:
+#  cpu: 100m
+#  memory: 128Mi
 
-nodeSelector: {}
+nodeSelector: { }
 
-tolerations: []
+tolerations: [ ]
 
-affinity: {}
+affinity: { }

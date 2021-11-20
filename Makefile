@@ -36,3 +36,9 @@ rendered-manifest.yaml:
         --set image.repository=$(IMAGE_NAME) \
         --set image.tag=$(IMAGE_TAG) \
         deploy/dnspod-webhook > "$(OUT)/rendered-manifest.yaml"
+
+install:
+	helm install -n cert-manager cert-manager-webhook-dnspod ./deploy/dnspod-webhook -f values.yaml
+
+delete:
+	helm delete -n cert-manager cert-manager-webhook-dnspod

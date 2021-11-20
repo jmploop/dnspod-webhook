@@ -1,3 +1,9 @@
 # Solver testdata directory
 
-TODO
+```json
+{
+  "secretId": "Your secretId",
+  "secretKey": "Your secretKey",
+  "ttl": 600
+}
+```

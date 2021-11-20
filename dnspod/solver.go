@@ -2,21 +2,23 @@ package dnspod
 
 import (
 	"context"
-	"fmt"
 	"github.com/jetstack/cert-manager/pkg/acme/webhook"
 	"github.com/jetstack/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	cmmeta "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
+	"github.com/jetstack/cert-manager/pkg/issuer/acme/dns/util"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog"
+	"strings"
 )
 
 // DnsPodSolver implements the provider-specific logic needed to
 // 'present' an ACME challenge TXT record for your own DNS provider.
 type DnsPodSolver struct {
-	client *kubernetes.Clientset
+	client     *kubernetes.Clientset
+	dnsClients map[string]*Client
 }
 
 func NewSolver() webhook.Solver {
@@ -32,30 +34,25 @@ func (c *DnsPodSolver) Name() string {
 	return "dnspod"
 }
 
-func (c *DnsPodSolver) newDnsPodClient(ch *v1alpha1.ChallengeRequest) (*Client, error) {
+func (c *DnsPodSolver) loadConfig(ch *v1alpha1.ChallengeRequest) (Config, error) {
 	cfg, err := loadConfig(ch.Config)
 	if err != nil {
-		return nil, err
+		return cfg, err
 	}
 
-	klog.Infof("Decoded config: %v", cfg)
+	if cfg.SecretId == "" {
+		return cfg, errors.New("Not SecretId found in config")
+	}
 
 	ctx := context.Background()
-	secretId, err := c.getSecret(ctx, cfg.APISecretIdRef, ch.ResourceNamespace)
+	secretKey, err := c.getSecret(ctx, cfg.SecretKeyRef, ch.ResourceNamespace)
 	if err != nil {
-		return nil, err
-	}
-	secretKey, err := c.getSecret(ctx, cfg.APISecretKeyRef, ch.ResourceNamespace)
-	if err != nil {
-		return nil, err
+		return cfg, err
 	}
 
-	client, err := newClient(string(secretId), string(secretKey))
-	if err != nil {
-		return nil, fmt.Errorf("new dns client error: %v", err)
-	}
+	cfg.SecretKey = string(secretKey)
 
-	return client, nil
+	return cfg, nil
 }
 
 func (c *DnsPodSolver) getSecret(ctx context.Context, selector cmmeta.SecretKeySelector, ns string) ([]byte, error) {
@@ -65,14 +62,14 @@ func (c *DnsPodSolver) getSecret(ctx context.Context, selector cmmeta.SecretKeyS
 		metav1.GetOptions{},
 	)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to load secret %q", ns+"/"+selector.Name)
+		return nil, errors.Wrapf(err, "Failed to load secret %q", ns+"/"+selector.Name)
 	}
 
 	if data, ok := secret.Data[selector.Key]; ok {
 		return data, nil
 	}
 
-	return nil, errors.Errorf("no key %q in secret %q", selector.Key, ns+"/"+selector.Name)
+	return nil, errors.Errorf("Not key %q in secret %q", selector.Key, ns+"/"+selector.Name)
 }
 
 // Present is responsible for actually presenting the DNS record with the
@@ -83,19 +80,28 @@ func (c *DnsPodSolver) getSecret(ctx context.Context, selector cmmeta.SecretKeyS
 func (c *DnsPodSolver) Present(ch *v1alpha1.ChallengeRequest) error {
 	klog.Infof("Presenting txt record: %v %v", ch.ResolvedFQDN, ch.ResolvedZone)
 
-	client, err := c.newDnsPodClient(ch)
+	cfg, err := c.loadConfig(ch)
 	if err != nil {
-		klog.Errorf("New client from challenge error: %v", err)
+		klog.Errorf("Load config from challenge error: %v", err)
 		return err
 	}
 
+	client, err := c.getDnsClient(cfg)
+	if err != nil {
+		klog.Errorf("Get client from challenge error: %v", err)
+		return err
+	}
+
+	domain := c.extractDomainName(ch.ResolvedZone)
+	subDomain := c.extractRecordName(ch.ResolvedFQDN, domain)
+
 	txtRecord := TXTRecord{
-		Domain:    "",
-		SubDomain: "",
+		Domain:    domain,
+		SubDomain: subDomain,
 		Value:     ch.Key,
 	}
 
-	err = client.addTxtRecord(txtRecord)
+	err = client.AddTxtRecord(txtRecord)
 	if err != nil {
 		klog.Errorf("Add txt record %q error: %v", ch.ResolvedFQDN, err)
 		return err
@@ -114,19 +120,32 @@ func (c *DnsPodSolver) Present(ch *v1alpha1.ChallengeRequest) error {
 func (c *DnsPodSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
 	klog.Infof("Cleaning up txt record: %v %v", ch.ResolvedFQDN, ch.ResolvedZone)
 
-	client, err := c.newDnsPodClient(ch)
+	cfg, err := c.loadConfig(ch)
 	if err != nil {
-		klog.Errorf("New client from challenge error: %v", err)
+		klog.Errorf("Load config from challenge error: %v", err)
 		return err
 	}
 
+	client, err := c.getDnsClient(cfg)
+	if err != nil {
+		klog.Errorf("Get client from challenge error: %v", err)
+		return err
+	}
+
+	authZone, err := util.FindZoneByFqdn(ch.ResolvedZone, util.RecursiveNameservers)
+	if err != nil {
+		return nil
+	}
+	domain := util.UnFqdn(authZone)
+	subDomain := c.extractRecordName(ch.ResolvedFQDN, domain)
+
 	txtRecord := TXTRecord{
-		Domain:    "",
-		SubDomain: "",
+		Domain:    domain,
+		SubDomain: subDomain,
 		Value:     ch.Key,
 	}
 
-	err = client.deleteTxtRecord(txtRecord)
+	err = client.DeleteTxtRecord(txtRecord)
 	if err != nil {
 		klog.Errorf("Delete domain record %v error: %v", ch.ResolvedFQDN, err)
 		return err
@@ -152,5 +171,39 @@ func (c *DnsPodSolver) Initialize(kubeClientConfig *rest.Config, stopCh <-chan s
 	}
 
 	c.client = cl
+	c.dnsClients = make(map[string]*Client)
 	return nil
+}
+
+func (c *DnsPodSolver) getDnsClient(cfg Config) (*Client, error) {
+	secretId := cfg.SecretId
+	client, ok := c.dnsClients[secretId]
+
+	if ok {
+		return client, nil
+	}
+
+	client, err := NewClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	c.dnsClients[secretId] = client
+
+	return client, nil
+}
+
+func (c *DnsPodSolver) extractRecordName(fqdn, domain string) string {
+	if idx := strings.Index(fqdn, "."+domain); idx != -1 {
+		return fqdn[:idx]
+	}
+	return util.UnFqdn(fqdn)
+}
+
+func (c *DnsPodSolver) extractDomainName(zone string) string {
+	authZone, err := util.FindZoneByFqdn(zone, util.RecursiveNameservers)
+	if err != nil {
+		return zone
+	}
+	return util.UnFqdn(authZone)
 }

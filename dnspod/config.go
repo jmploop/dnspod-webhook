@@ -23,8 +23,10 @@ import (
 // resource and fetch these credentials using a Kubernetes clientset.
 
 type Config struct {
-	APISecretIdRef  cmmeta.SecretKeySelector `json:"apiSecretIdRef"`
-	APISecretKeyRef cmmeta.SecretKeySelector `json:"apiSecretKeyRef"`
+	SecretId     string                   `json:"secretId"`
+	SecretKey    string                   `json:"secretKey"`
+	SecretKeyRef cmmeta.SecretKeySelector `json:"secretKeyRef"`
+	TTL          *uint64                  `json:"ttl"`
 }
 
 // loadConfig is a small helper function that decodes JSON configuration into
