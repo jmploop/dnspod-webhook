@@ -1,0 +1,21 @@
+name: DEPLOY
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-18.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Publish
+        uses: elgohr/Publish-Docker-Github-Action@master
+        with:
+          name: jmploop/cert-manager-webhook-dnspod
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
