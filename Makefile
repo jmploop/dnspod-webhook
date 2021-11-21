@@ -42,3 +42,7 @@ install:
 
 delete:
 	helm delete -n cert-manager cert-manager-webhook-dnspod
+
+package:
+	helm package ./deploy/dnspod-webhook -d docs; \
+    helm repo index docs --url https://charts.jmploop.com/dnspod-webhook;

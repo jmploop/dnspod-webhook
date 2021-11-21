@@ -10,6 +10,10 @@ If you want to create clusterIssuer, please run.
 
 ```bash
 helm install -n cert-manager cert-manager-webhook-dnspod ./deploy/dnspod-webhook -f values.yaml
+or 
+helm repo add dnspod-webhook https://charts.jmploop.com/dnspod-webhook
+helm repo update
+helm install -n cert-manager cert-manager-webhook-dnspod dnspod-webhook/cert-manager-webhook-dnspod -f values.yaml
 ```
 
 values.yaml example, additional details [see](./deploy/dnspod-webhook/values.yaml).
