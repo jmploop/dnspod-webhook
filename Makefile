@@ -45,4 +45,4 @@ delete:
 
 package:
 	helm package ./deploy/dnspod-webhook -d docs; \
-    helm repo index docs --url https://charts.jmploop.com/dnspod-webhook;
+    helm repo index docs --url https://jmploop.github.io/dnspod-webhook;
