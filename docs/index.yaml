@@ -3,11 +3,11 @@ entries:
   cert-manager-webhook-dnspod:
   - apiVersion: v2
     appVersion: "1.0"
-    created: "2021-11-21T14:37:03.25623+08:00"
+    created: "2021-11-25T21:21:04.873758+08:00"
     description: A helm chart for cert-manager webhook for DNSPod
-    digest: 5a36a90b528ea7a87497c66fab115eeced757dff334852878c42160f16779be2
+    digest: f1c081d9712cacc0da83ea72dfd6d22c3fe50b9ed14cebae9ce0b76e66e0944d
     name: cert-manager-webhook-dnspod
     urls:
     - https://jmploop.github.io/dnspod-webhook/cert-manager-webhook-dnspod-1.0.0.tgz
     version: 1.0.0
-generated: "2021-11-21T14:37:03.255336+08:00"
+generated: "2021-11-25T21:21:04.873011+08:00"
